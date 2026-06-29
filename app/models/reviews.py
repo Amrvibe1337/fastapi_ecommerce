@@ -11,7 +11,7 @@ class Review(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE "), nullable=False)
     comment: Mapped[str | None] = mapped_column(String, nullable=True)
     comment_date: Mapped[datetime] = mapped_column(Date, default=datetime.now)
     grade: Mapped[int] = mapped_column(Integer, nullable=False)
