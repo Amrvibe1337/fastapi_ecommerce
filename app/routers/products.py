@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import select, update, func, desc
+from sqlalchemy import select, update, func, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db_depends import get_async_db
 from typing import Literal
@@ -25,6 +25,7 @@ async def get_all_products(
     page_size: int = Query(20, ge=1, le=100),
     category_id: int | None = Query(
         None, description="ID категории для фильтрации"),
+    search: str | None = Query(None, min_length=1, description="Поиск по названию товара"),
     min_price: float | None = Query(
         None, ge=0, description="Минимальная цена товара"
     ),
@@ -68,29 +69,45 @@ async def get_all_products(
     if seller_id is not None:
         filters.append(ProductModel.seller_id == seller_id)
 
-    # Подсчёт общего количества с учётом фильтров
+    # Базовый запрос total
     total_stmt = select(func.count()).select_from(ProductModel).where(*filters)
+
+    rank_col = None
+    if search:
+        search_value = search.strip()
+        if search_value:
+            ts_query = func.websearch_to_tsquery('english', search_value)
+            filters.append(ProductModel.tsv.op('@@')(ts_query))
+            rank_col = func.ts_rank_cd(ProductModel.tsv, ts_query).label("rank")
+            # total с учётом полнотекстового фильтра
+            total_stmt = select(func.count()).select_from(ProductModel).where(*filters)
+
     total = await db.scalar(total_stmt) or 0
 
-    # Формируем список сортировок
-    order_by_clause = [ProductModel.id]
+    # Основной запрос (если есть поиск — добавим ранг в выборку и сортировку)
+    if rank_col is not None:
+        products_stmt = (
+            select(ProductModel, rank_col)
+            .where(*filters)
+            .order_by(desc(rank_col), ProductModel.id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        result = await db.execute(products_stmt)
+        rows = result.all()
+        items = [row[0] for row in rows]    # сами объекты
+        # при желании можно вернуть ранг в ответе
+        # ranks = [row.rank for row in rows]
+    else:
+        products_stmt = (
+            select(ProductModel)
+            .where(*filters)
+            .order_by(ProductModel.id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        items = (await db.scalars(products_stmt)).all()
 
-    if sort_by_created == "asc":
-        # Сначала сортируем по дате (от старых к новым), потом по id
-        order_by_clause.insert(0, ProductModel.created_at.asc())
-        
-    elif sort_by_created == "desc":
-        # Сначала сортируем по дате (от новых к старым), потом по id
-        order_by_clause.insert(0, ProductModel.created_at.desc())
-            
-    products_stmt = (
-        select(ProductModel)
-        .where(*filters)
-        .order_by(*order_by_clause)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    items = (await db.scalars(products_stmt)).all()
     return {
         "items": items,
         "total": total,
