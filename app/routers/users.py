@@ -48,13 +48,15 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(),
         select(UserModel).where(UserModel.email == form_data.username,
                                 UserModel.is_active == True)
     )
-    user = result.first()
+    user = result.first()   # Нашли чела в таблице UserModel по почте из формы
+    # Если нет чела с такой почтой или введенный пароль не совпадает, то ошибка.
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # Иначе возвращаем пользователю токены
     access_token = create_access_token(data={"sub": user.email, "role": user.role, "id": user.id})
     refresh_token = create_refresh_token(data={"sub": user.email, "role": user.role, "id": user.id})    
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
@@ -78,6 +80,7 @@ async def refresh_token(
 
     try:
         payload = jwt.decode(old_refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        
         email: str | None = payload.get("sub")
         token_type: str | None = payload.get("token_type")
 
@@ -129,6 +132,7 @@ async def new_access_token(body: RefreshTokenRequest,
 
     try:
         payload = jwt.decode(rfrsh_tkn, SECRET_KEY,  algorithms=[ALGORITHM])
+
         email: str | None = payload.get("sub")
         token_type: str | None =  payload.get("token_type")
 

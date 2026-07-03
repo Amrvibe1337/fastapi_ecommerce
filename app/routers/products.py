@@ -69,6 +69,17 @@ async def get_all_products(
     if seller_id is not None:
         filters.append(ProductModel.seller_id == seller_id)
 
+    # Формируем список сортировок
+    order_by_clause = [ProductModel.id]
+
+    if sort_by_created == "asc":
+        # Сначала сортируем по дате (от старых к новым), потом по id
+        order_by_clause.insert(0, ProductModel.created_at.asc())    # type: ignore
+        
+    elif sort_by_created == "desc":
+        # Сначала сортируем по дате (от новых к старым), потом по id
+        order_by_clause.insert(0, ProductModel.created_at.desc())   # type: ignore
+
     # Базовый запрос total
     total_stmt = select(func.count()).select_from(ProductModel).where(*filters)
 
@@ -89,7 +100,7 @@ async def get_all_products(
         products_stmt = (
             select(ProductModel, rank_col)
             .where(*filters)
-            .order_by(desc(rank_col), ProductModel.id)
+            .order_by(desc(rank_col), *order_by_clause)
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -102,7 +113,7 @@ async def get_all_products(
         products_stmt = (
             select(ProductModel)
             .where(*filters)
-            .order_by(ProductModel.id)
+            .order_by(*order_by_clause)
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
