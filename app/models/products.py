@@ -47,6 +47,10 @@ class Product(Base):
     # Отношение 5
     reviews: Mapped["Review"] = relationship("Review", back_populates="product") # type: ignore
     
+    # Отношение 6
+    # Это позволит обращаться к product.cart_items и получать все позиции из корзин, где этот товар присутствует.
+    cart_items: Mapped[list["CartItem"]] = relationship("CartItem", back_populates="product", cascade="all, delete-orphan")    # type: ignore
+
     __table_args__ = (
         Index("ix_products_tsv_gin", "tsv", postgresql_using="gin"),
     )

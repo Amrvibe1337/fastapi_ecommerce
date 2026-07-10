@@ -21,3 +21,7 @@ class User(Base):
 
     # Отношение 4
     reviews: Mapped[list["Review"]] = relationship("Review", back_populates="user") # type: ignore
+
+    # Отношение 7
+    cart_items: Mapped[list["CartItem"]] = relationship("CartItem", back_populates="user", cascade="all, delete-orphan")    # type: ignore
+
